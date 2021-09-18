@@ -1,0 +1,6 @@
+#[masters]
+#master-clusternode01 ansible_host=<yourhostIP> ansible_user=root ansible_sudo_pass=<hostPasswd>
+
+[workers]
+worker-clusternode04 ansible_host=<yourhostIP> ansible_user=root
+#worker-clusternode03 ansible_host=<yourhostIP> ansible_user=root

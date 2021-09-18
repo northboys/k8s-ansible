@@ -1,0 +1,137 @@
+---
+- hosts: "masters, workers"
+  remote_user: root
+  become: yes
+  become_method: sudo
+  become_user: root
+  gather_facts: yes
+  connection: ssh
+
+  tasks:
+     - name: Create cri-o config file
+       file:
+         path: "/etc/modules-load.d/crio.conf"
+         state: "touch"
+
+     - name: Add conf for cri-o
+       blockinfile:
+         path: "/etc/modules-load.d/crio.conf"
+         block: |
+               overlay
+               br_netfilter
+     - name: modprobe
+       shell: |
+               sudo modprobe overlay
+               sudo modprobe br_netfilter
+     - name: Set system configurations for Kubernetes networking
+       file:
+         path: "/etc/sysctl.d/99-kubernetes-cri.conf"
+         state: "touch"
+
+     - name: Add conf for cri-o
+       blockinfile:
+         path: "/etc/sysctl.d/99-kubernetes-cri.conf"
+         block: |
+                net.bridge.bridge-nf-call-iptables  = 1
+                net.ipv4.ip_forward                 = 1
+                net.bridge.bridge-nf-call-ip6tables = 1
+     - name: Apply new settings
+       command: sudo sysctl --system
+
+     - name: Create cri-o repo file 1
+       file:
+         path: "/etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list"
+         state: "touch"
+
+     - name: Add cri-o Source 1
+       blockinfile:
+         path: "/etc/apt/sources.list.d/devel:kubic:libcontainers:stable.list"
+         block: |
+               deb https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/ /
+
+     - name: Create cri-o repo file 2
+       file:
+         path: "/etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:1.21.list"
+         state: "touch"
+
+     - name: Add cri-o Source 2
+       blockinfile:
+         path: "/etc/apt/sources.list.d/devel:kubic:libcontainers:stable:cri-o:1.21.list"
+         block: |
+               deb http://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/1.21/xUbuntu_20.04/ /
+
+     - name: download the cri-o apt key 1
+       get_url:
+         url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/1.21:/1.21.2/xUbuntu_20.04/Release.key
+         dest: /etc/Release.key
+       become: true
+
+     - name: install cri-o apt key 1 from a file
+       apt_key:
+         file: /etc/Release.key
+         state: present
+       become: true
+
+     - name: download the cri-o apt key 2
+       get_url:
+         url: https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable/xUbuntu_20.04/Release.key
+         dest: /tmp/Release.key
+       become: true
+
+     - name: install cri-o apt key 2 from a file
+       apt_key:
+         file: /tmp/Release.key
+         state: present
+       become: true
+
+     - name: install cri-o
+       shell: |
+               sudo apt-get update && sudo apt-get install -y cri-o cri-o-runc
+               sudo systemctl daemon-reload
+               sudo systemctl enable crio --now
+               
+     - name: disable swap
+       shell: |
+               sudo swapoff -a
+               sudo sed -i '/ swap / s/^\(.*\)$/#\1/g' /etc/fstab
+     - name: install and configure dependencies
+       shell: |
+               sudo apt-get update
+               sudo apt-get update && sudo apt-get install -y apt-transport-https curl
+               curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+     - name: Create kubernetes repo file
+       file:
+         path: "/etc/apt/sources.list.d/kubernetes.list"
+         state: "touch"
+
+     - name: Add K8s Source
+       blockinfile:
+         path: "/etc/apt/sources.list.d/kubernetes.list"
+         block: |
+               deb https://apt.kubernetes.io/ kubernetes-xenial main
+     - name: install kubernetes
+       shell: |
+               sudo apt-get update
+               sudo apt-get install -y kubelet=1.20.1-00 kubeadm=1.20.1-00 kubectl=1.20.1-00
+               sudo apt-mark hold kubelet kubeadm kubectl
+
+    #  - name: Remove file (delete file)
+    #    ansible.builtin.file:
+    #     path: /var/lib/kubelet/kubeadm-flags.env
+    #     state: absent
+
+    #  - name: Create env kubelet file
+    #    file:
+    #      path: "/var/lib/kubelet/kubeadm-flags.env"
+    #      state: "touch"
+
+    #  - name: Add systemd flag to kubelet conf
+    #    blockinfile:
+    #      path: "/var/lib/kubelet/kubeadm-flags.env"
+    #      block: |
+    #            KUBELET_KUBEADM_ARGS="--container-runtime=remote --cgroup-driver=systemd --container-runtime-endpoint=/var/run/crio/crio.sock"
+
+    #  - name: reload systemd and restart kubelet service
+    #    shell: |
+    #             systemctl daemon-reload
+    #             systemctl restart kubelet

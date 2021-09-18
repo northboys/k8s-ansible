@@ -1,0 +1,66 @@
+- hosts: masters
+  become: yes
+  tasks:
+    - name: Add conf cri-o to systemd
+      blockinfile:
+        path: "/etc/systemd/system/kubelet.service.d/10-kubeadm.conf"
+        block: |
+              Environment="KUBELET_EXTRA_ARGS=--feature-gates='AllAlpha=false,RunAsGroup=true' --container-runtime=remote --cgroup-driver=systemd --container-runtime-endpoint='unix:///var/run/crio/crio.sock' --runtime-request-timeout=5m"
+    - name: reload systemd and restart kubelet service
+      shell: |
+               systemctl daemon-reload
+               systemctl  restart kubelet
+
+    - name: initialize the cluster
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address 192.168.123.51
+      args:
+        chdir: $HOME
+        creates: cluster_initialized.txt
+
+    - name: create .kube directory
+      become: yes
+      become_user: kube
+      file:
+        path: $HOME/.kube
+        state: directory
+        mode: 0755
+
+    # - name: Install required packaged
+    #   apt:
+    #     name: "{{ item }}"
+    #     state: present
+    #   with_items:
+    #     - acl
+
+    - name: copies admin.conf to user's kube config
+      become: yes
+      copy:
+        src: /etc/kubernetes/admin.conf
+        dest: /home/kube/.kube/config
+        remote_src: yes
+        owner: kube
+        
+
+    # - name: install Pod network [CNI]
+    #   become: yes
+    #   become_user: kube
+    #   shell: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml 
+    #   args:
+    #     chdir: $HOME
+        
+    - name: Get the token for joining the worker nodes
+      become: yes
+      become_user: kube
+      shell: kubeadm token create  --print-join-command
+      register: kubernetes_join_command
+    
+    - name: debug join cluster command
+      ansible.builtin.debug:
+        msg: "{{ kubernetes_join_command.stdout }}"
+
+    # - debug:
+    #   msg: "{{ kubernetes_join_command.stdout }}"
+
+    - name: Copy join command to local file.
+      become: false
+      local_action: copy content="{{ kubernetes_join_command.stdout_lines[0] }}" dest="/tmp/kubernetes_join_command" mode=0777
