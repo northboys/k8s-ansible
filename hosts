@@ -1,5 +1,5 @@
 [masters]
-master-clusternode01 ansible_host=<hostIP> ansible_user=root ansible_sudo_pass=mit
+master-clusternode01 ansible_host=<hostIP> ansible_user=root ansible_sudo_pass=<your_host_passwd>
 
 [workers]
 worker-clusternode02 ansible_host=<yourhostIP> ansible_user=root

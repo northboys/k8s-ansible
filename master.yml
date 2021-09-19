@@ -12,7 +12,7 @@
                systemctl  restart kubelet
 
     - name: initialize the cluster
-      shell: kubeadm init --pod-network-cidr=10.244.0.0/16 --apiserver-advertise-address 192.168.123.51
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16 
       args:
         chdir: $HOME
         creates: cluster_initialized.txt
