@@ -1,0 +1,120 @@
+- hosts: masters
+  become: yes
+  vars_prompt:
+    - name: git_user
+      private: no
+    - name: git_pass
+      private: yes
+  tasks:
+    - name: (IP Pool - Load Balancer) install MetalLB 
+      become: yes
+      become_user: kube
+      shell: kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/metallb-installation.yaml 
+      args:
+        chdir: $HOME
+    - git:
+      repo: "https://{{git_user|urlencode()}}:{{git_pass|urlencode()}}@keepo.mit.id/izalul/enggano-environment.git"
+      dest: "/tmp/enggano-environment"
+      update: yes
+    - name: Add the istioctl client to your path
+      args:
+        chdir: "/tmp/enggano-environment/istio-1.11.1"
+      shell: export PATH=$PWD/bin:$PATH
+
+    - name: (Ingress & Service Mesh) install Istio Mesh
+      become: yes
+      become_user: kube
+      shell: istioctl install --set profile=demo -y  
+      args:
+        chdir: "/tmp/enggano-environment/istio-1.11.1"
+
+    - name: install Istio Telemetry Addons
+      become: yes
+      become_user: kube
+      shell: |
+               kubectl apply -f samples/addons
+               kubectl rollout status deployment/kiali -n istio-system
+      args:
+        chdir: "/tmp/enggano-environment/istio-1.11.1"
+    - name: (Certificate Management) install Cert-Manager 
+      become: yes
+      become_user: kube
+      shell: | 
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/cert-manager-v1.5.3.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/cluster-issuer.yaml
+      args:
+        chdir: $HOME
+    - name: (Certificate Management) install Cert for public domain
+      become: yes
+      become_user: kube
+      shell: |
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/certificate-gitlab.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/certificate-enggano.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/certificate-grafana.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/certificate-kiali.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/certificate-longhorn.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/certificate-nexus.yaml
+      args:
+        chdir: $HOME
+    - name: (Storage) install Longhorn ISCSI
+      become: yes
+      become_user: kube
+      shell: kubectl apply -f https://raw.githubusercontent.com/longhorn/longhorn/v1.2.0/deploy/prerequisite/longhorn-iscsi-installation.yaml
+      args:
+        chdir: $HOME
+    - name: (Storage) install Longhorn
+      become: yes
+      become_user: kube
+      shell: |
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/longhorn-installation.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/longhorn-istio-installation.yaml
+      args:
+        chdir: $HOME
+    - name: (Container Registry) install NexusOSS
+      become: yes
+      become_user: kube
+      shell: | 
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/nexus-installation.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/nexus-istio-installation.yaml
+      args:
+        chdir: $HOME
+    - name: (Application Repository) install Gitlab
+      become: yes
+      become_user: kube
+      shell: |
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/gitlab-installation.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/gitlab-istio-installation.yaml 
+      args:
+        chdir: $HOME
+
+    - name: (Enggano Environment) install Mysql-Moco
+      become: yes
+      become_user: kube
+      shell: |
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/moco-operator-installation.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/moco-mysql-volume.yaml 
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/moco-mysql-pvc.yaml
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/moco-mysql-cluster.yaml
+      args:
+        chdir: $HOME
+    - name: (Enggano Environment) install Redis
+      become: yes
+      become_user: kube
+      shell: |
+               kubectl apply -f https://keepo.mit.id/izalul/enggano-environment/raw/master/redis-installation.yaml
+      args:
+        chdir: $HOME
+    # setup end <need testing>
+    # - name: (Enggano Environment) install Enggano-Core
+    #   become: yes
+    #   become_user: kube
+    #   shell: kubectl apply -f <file.yaml URL>  
+    #   args:
+    #     chdir: $HOME
+    # - name: (Enggano Environment) install Enggano-Ingress
+    #   become: yes
+    #   become_user: kube
+    #   shell: kubectl apply -f https://docs.projectcalico.org/manifests/calico.yaml 
+    #   args:
+    #     chdir: $HOME
+ 
